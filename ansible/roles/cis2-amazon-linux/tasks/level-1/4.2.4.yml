@@ -1,0 +1,30 @@
+# Standards: 0.11
+---
+
+# 4.2.4 Ensure permissions on all logfiles are configured
+
+- name: 4.2.4 - Find all log files
+  find: 
+    paths: "/var/log"
+    recurse: yes
+  register: log_files
+  changed_when: False
+  tags:
+    - level-1
+    - section-4
+    - "4.2.4"
+    - scored
+
+- name: 4.2.4 - Apply file permissions
+  file:
+    path: "{{ item.path }}"
+    owner: root
+    group: root
+    mode: 0640
+  with_items: "{{ log_files.files }}"
+  when: item.path not in cis_log_file_exceptions
+  tags:
+    - level-1
+    - section-4
+    - "4.2.4"
+    - scored

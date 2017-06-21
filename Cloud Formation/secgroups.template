@@ -1,0 +1,127 @@
+{
+  "AWSTemplateFormatVersion" : "2010-09-09",
+
+  "Description" : "Creates subnets and sets up routing for base application setup.",
+
+  "Parameters" : {
+    "VPC" : {
+      "Type" : "String"
+    }
+  },
+
+  "Mappings" : {
+  },
+
+  "Resources" : {
+
+
+    "CSDSDemoJumpboxLoadBalancerSecurityGroup" : {
+      "Type" : "AWS::EC2::SecurityGroup",
+      "Properties" : {
+        "GroupDescription" : "Enable SSH access on port 22",
+        "VpcId" : { "Ref" : "VPC" },
+        "SecurityGroupIngress" : [ { 
+          "IpProtocol" : "tcp",
+          "FromPort" : "22",
+          "ToPort" : "22",
+          "CidrIp" : "0.0.0.0/0"
+        } ]
+      }
+    },
+    "CSDSDemoJumpboxSecurityGroup" : {
+      "Type" : "AWS::EC2::SecurityGroup",
+      "Properties" : {
+        "GroupDescription" : "Enable SSH access on port 22",
+        "VpcId" : { "Ref" : "VPC" },
+        "SecurityGroupIngress" : [ { 
+          "IpProtocol" : "tcp",
+          "FromPort" : "22",
+          "ToPort" : "22",
+          "SourceSecurityGroupId" : { "Ref" : "CSDSDemoJumpboxLoadBalancerSecurityGroup" }
+        } ]
+      }
+    },
+
+    "CSDSDemoToolsJumpboxSecurityGroup" : {
+      "Type" : "AWS::EC2::SecurityGroup",
+      "Properties" : {
+        "GroupDescription" : "Allow all access to jumpbox hosts.",
+        "VpcId" : { "Ref" : "VPC" },
+        "SecurityGroupIngress" : [ { 
+          "IpProtocol" : "tcp",
+          "FromPort" : "0",
+          "ToPort" : "65535",
+          "SourceSecurityGroupId" : { "Ref" : "CSDSDemoJumpboxSecurityGroup" }
+        } ]
+      }
+    },
+
+    "CSDSDemoWebServerSecurityGroup" : {
+      "Type" : "AWS::EC2::SecurityGroup",
+      "Properties" : {
+        "GroupDescription" : "Security group allowing Public ELB access to webservers.",
+        "VpcId" : { "Ref" : "VPC" },
+        "SecurityGroupIngress" : [ { 
+          "IpProtocol" : "tcp",
+          "FromPort" : "80",
+          "ToPort" : "80",
+          "SourceSecurityGroupId" : { "Ref" : "CSDSDemoPublicLoadBalancerSecurityGroup" }
+        },
+        { 
+          "IpProtocol" : "tcp",
+          "FromPort" : "443",
+          "ToPort" : "443",
+          "SourceSecurityGroupId" : { "Ref" : "CSDSDemoPublicLoadBalancerSecurityGroup" }
+        },
+        { 
+          "IpProtocol" : "tcp",
+          "FromPort" : "0",
+          "ToPort" : "65535",
+          "SourceSecurityGroupId" : { "Ref" : "CSDSDemoToolsJumpboxSecurityGroup" }
+        } ]
+      }
+    },
+
+    "CSDSDemoPublicLoadBalancerSecurityGroup" : {
+      "Type" : "AWS::EC2::SecurityGroup",
+      "Properties" : {
+        "GroupDescription" : "Enable HTTP/HTTPS access on port 80/443 to 80/8080",
+        "VpcId" : { "Ref" : "VPC" },
+        "SecurityGroupIngress" : [ { 
+          "IpProtocol" : "tcp",
+          "FromPort" : "80",
+          "ToPort" : "80",
+          "CidrIp" : "0.0.0.0/0"
+        },
+        { 
+          "IpProtocol" : "tcp",
+          "FromPort" : "443",
+          "ToPort" : "443",
+          "CidrIp" : "0.0.0.0/0"
+        } ]
+      }
+    },
+  },
+  "Outputs" : {
+    "JumpboxLoadBalancerSecurityGroup" : {
+      "Description" : "Security group for JumpboxLoadBalancer",
+      "Value" : { "Ref" : "CSDSDemoJumpboxLoadBalancerSecurityGroup"}
+    },
+    "PublicLoadBalancerSecurityGroup" : {
+      "Description" : "Security group for Web Load Balancer",
+      "Value" : { "Ref" : "CSDSDemoPublicLoadBalancerSecurityGroup"}
+    },
+    "JumpboxSecurityGroup" : {
+      "Description" : "Security group to place jumpbox hosts into",
+      "Value" : { "Ref" : "CSDSDemoJumpboxSecurityGroup"}
+    },
+    "ToolsSecurityGroup" : {
+      "Description" : "Security to apply to ALL tools servers.",
+      "Value" : { "Ref" : "CSDSDemoToolsJumpboxSecurityGroup"}
+    },
+    "WebServerSecurityGroup" : {
+      "Description" : "Security group for web servers.",
+      "Value" : { "Ref" : "CSDSDemoWebServerSecurityGroup"}
+    }
+  }
+}

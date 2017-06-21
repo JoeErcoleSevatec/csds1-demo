@@ -1,0 +1,6 @@
+---
+- hosts: all
+  roles:
+  - cis2-amazon-linux
+  remote_user: ansible
+  become: yes

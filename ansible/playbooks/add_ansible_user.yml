@@ -1,0 +1,42 @@
+---
+- hosts: all
+  vars:
+    init_user: ec2-user
+    allow_ssh_group: allowSsh
+  remote_user: "{{ init_user }}"
+  become: yes
+
+  tasks:
+  - name: Create Ansible group
+    group:
+      name: ansible
+  - name: Create allowSsh group
+    group:
+      name: "{{ allow_ssh_group }}"
+  - name: Create Ansible User
+    user:
+      name: ansible
+      comment: "Ansible"
+      group: ansible
+      groups: "wheel,allowSsh"
+  - name: Allow 'ansible' user to have passwordless sudo
+    lineinfile:
+      dest: /etc/sudoers
+      state: present
+      regexp: '^%ansible'
+      line: '%ansible ALL=(ALL) NOPASSWD: ALL'
+      validate: visudo -cf %s
+  - name: Create .ssh directory
+    file:
+      path: /home/ansible/.ssh
+      state: directory
+      mode: 0700
+      owner: ansible
+      group: ansible
+  - name: Copy authorized_keys file
+    copy:
+      src: /etc/ansible/.ssh/authorized_keys
+      dest: /home/ansible/.ssh/authorized_keys
+      mode: 0600
+      owner: ansible
+      group: ansible

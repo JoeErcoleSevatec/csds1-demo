@@ -1,0 +1,42 @@
++BRAKEMAN REPORT+
+
+Application path: /var/lib/jenkins/workspace/CSDS_Ruby_App
+Rails version: 4.1.9
+Brakeman version: 3.6.2
+Started at 2017-06-15 19:01:12 +0000
+Duration: 1.177449106 seconds
+Checks run: BasicAuth, BasicAuthTimingAttack, ContentTag, CreateWith, CrossSiteScripting, DefaultRoutes, Deserialize, DetailedExceptions, DigestDoS, DynamicFinders, EscapeFunction, Evaluation, Execute, FileAccess, FileDisclosure, FilterSkipping, ForgerySetting, HeaderDoS, I18nXSS, JRubyXML, JSONEncoding, JSONParsing, LinkTo, LinkToHref, MailTo, MassAssignment, MimeTypeDoS, ModelAttrAccessible, ModelAttributes, ModelSerialize, NestedAttributes, NestedAttributesBypass, NumberToCurrency, QuoteTableName, Redirect, RegexDoS, Render, RenderDoS, RenderInline, ResponseSplitting, RouteDoS, SQL, SQLCVEs, SSLVerify, SafeBufferManipulation, SanitizeMethods, SelectTag, SelectVulnerability, Send, SendFile, SessionManipulation, SessionSettings, SimpleFormat, SingleQuotes, SkipBeforeFilter, StripTags, SymbolDoSCVE, TranslateBug, UnsafeReflection, ValidationRegex, WithoutProtection, XMLDoS, YAMLParsing
+
+
++SUMMARY+
+
++-------------------+-------+
+| Scanned/Reported  | Total |
++-------------------+-------+
+| Controllers       | 13    |
+| Models            | 8     |
+| Templates         | 67    |
+| Errors            | 0     |
+| Security Warnings | 5 (1) |
++-------------------+-------+
+
++----------------------+-------+
+| Warning Type         | Total |
++----------------------+-------+
+| Cross Site Scripting | 2     |
+| Denial of Service    | 2     |
+| Session Setting      | 1     |
++----------------------+-------+
+
+
++SECURITY WARNINGS+
+
++------------+-------+--------+----------------------+--------------------------------------------------------------------------------------------------------------------------------->>
+| Confidence | Class | Method | Warning Type         | Message                                                                                                                         >>
++------------+-------+--------+----------------------+--------------------------------------------------------------------------------------------------------------------------------->>
+| High       |       |        | Session Setting      | Session secret should not be included in version control near line 3                                                            >>
+| Medium     |       |        | Cross Site Scripting | Rails 4.1.9 content_tag does not escape double quotes in attribute values (CVE-2016-6316). Upgrade to 4.2.7.1 near line 90      >>
+| Medium     |       |        | Cross Site Scripting | Rails 4.1.9 does not encode JSON keys (CVE-2015-3226). Upgrade to Rails version 4.1.11 near line 90                             >>
+| Medium     |       |        | Denial of Service    | Rails 4.1.9 is vulnerable to denial of service via mime type caching (CVE-2016-0751). Upgrade to Rails version 4.1.14.1 near lin>>
+| Medium     |       |        | Denial of Service    | Rails 4.1.9 is vulnerable to denial of service via XML parsing (CVE-2015-3227). Upgrade to Rails version 4.1.11 near line 90    >>
++------------+-------+--------+----------------------+--------------------------------------------------------------------------------------------------------------------------------->>

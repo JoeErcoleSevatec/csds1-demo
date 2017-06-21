@@ -1,0 +1,37 @@
+# Standards: 0.11
+---
+
+# 2.2.1.2 Ensure ntp is configured
+
+- name: 2.2.1.2 - Ensure NTP runs with NTP user
+  lineinfile:
+    path: /etc/sysconfig/ntpd
+    regexp: '^[\s]*OPTIONS='
+    line: 'OPTIONS="-u ntp-ntp -g"'
+  tags:
+    - level-1
+    - section-4
+    - "2.2.1.2"
+    - scored
+
+- name: 2.2.1.2 - Ensure level 4 runtime options exist in configuration file
+  lineinfile:
+    path: /etc/ntp.conf
+    regexp: '^restrict -4'
+    line: "restrict -4 default kod nomodify notrap nopeer noquery"
+  tags:
+    - level-1
+    - section-4
+    - "2.2.1.2"
+    - scored
+
+- name: 2.2.1.2 - Ensure level 6 runtime options exist in configuration file
+  lineinfile:
+    path: /etc/ntp.conf
+    regexp: '^restrict -6'
+    line: "restrict -6 default kod nomodify notrap nopeer noquery"
+  tags:
+    - level-1
+    - section-4
+    - "2.2.1.2"
+    - scored

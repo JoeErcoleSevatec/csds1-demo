@@ -1,0 +1,244 @@
+{
+  "variables" : {
+    "aws_region" : "us-east-1",
+    "ami_id" : "ami-c58c1dd3",
+    "ssh_user":"ec2-user",
+    "root_volume_size": "10",
+    "home_volume_size": "5",
+    "var_volume_size": "5",
+    "var_log_volume_size": "5",
+    "var_log_audit_volume_size": "5",
+    "tmp_volume_size": "5",
+    "data_volume_size": "5",
+    "ami_desc":""
+  },
+  "builders":[{
+    "type" : "amazon-ebs",
+    "region" : "{{user `aws_region`}}",
+    "source_ami" : "{{user `ami_id`}}",
+    "instance_type" : "t2.large",
+    "ssh_username" : "{{user `ssh_user`}}",
+    "ami_name" : "CSDS-Rails Packer {{user `ami_desc`}} {{timestamp}}",
+            "launch_block_device_mappings": [
+                {
+                    "device_name": "/dev/xvda",
+                    "volume_type": "gp2",
+                    "volume_size": "{{user `root_volume_size`}}",
+                    "delete_on_termination": true
+                },
+                {
+                    "device_name": "/dev/xvdf",
+                    "volume_type": "gp2",
+                    "volume_size": "{{user `home_volume_size`}}",
+                    "delete_on_termination": true
+                },
+                {
+                    "device_name": "/dev/xvdg",
+                    "volume_type": "gp2",
+                    "volume_size": "{{user `var_volume_size`}}",
+                    "delete_on_termination": true
+                },
+                {
+                    "device_name": "/dev/xvdh",
+                    "volume_type": "gp2",
+                    "volume_size": "{{user `var_log_volume_size`}}",
+                    "delete_on_termination": true
+                },
+                {
+                    "device_name": "/dev/xvdi",
+                    "volume_type": "gp2",
+                    "volume_size": "{{user `var_log_audit_volume_size`}}",
+                    "delete_on_termination": true
+                },
+                {
+                    "device_name": "/dev/xvdj",
+                    "volume_type": "gp2",
+                    "volume_size": "{{user `tmp_volume_size`}}",
+                    "delete_on_termination": true
+                },
+                {
+                    "device_name": "/dev/xvdk",
+                    "volume_type": "gp2",
+                    "volume_size": "{{user `data_volume_size`}}",
+                    "delete_on_termination": true
+                }
+            ],
+            "ami_block_device_mappings": [
+                {
+                    "device_name": "/dev/xvda",
+                    "volume_type": "gp2",
+                    "volume_size": "{{user `root_volume_size`}}",
+                    "delete_on_termination": true
+                },
+                {
+                    "device_name": "/dev/xvdf",
+                    "volume_type": "gp2",
+                    "volume_size": "{{user `home_volume_size`}}",
+                    "delete_on_termination": true
+                },
+                {
+                    "device_name": "/dev/xvdg",
+                    "volume_type": "gp2",
+                    "volume_size": "{{user `var_volume_size`}}",
+                    "delete_on_termination": true
+                },
+                {
+                    "device_name": "/dev/xvdh",
+                    "volume_type": "gp2",
+                    "volume_size": "{{user `var_log_volume_size`}}",
+                    "delete_on_termination": true
+                },
+                {
+                    "device_name": "/dev/xvdi",
+                    "volume_type": "gp2",
+                    "volume_size": "{{user `var_log_audit_volume_size`}}",
+                    "delete_on_termination": true
+                },
+                {
+                    "device_name": "/dev/xvdj",
+                    "volume_type": "gp2",
+                    "volume_size": "{{user `tmp_volume_size`}}",
+                    "delete_on_termination": true
+                },
+                {
+                    "device_name": "/dev/xvdk",
+                    "volume_type": "gp2",
+                    "volume_size": "{{user `data_volume_size`}}",
+                    "delete_on_termination": true
+                }
+            ],
+            "user_data_file": "{{user `userdata`}}",
+            "run_tags": {
+                "Name": "CSDS-Rails",
+                "Owner": "Sevatec, Inc.",
+                "OwnerContact": "jceanfaglione@sevatec.com",
+                "Project": "CSDS"
+            },
+            "tags": {
+                "Name": "CSDS-Rails",
+                "Owner": "Sevatec, Inc.",
+                "OwnerContact": "jceanfaglione@sevatec.com",
+                "Project": "CSDS"
+            }
+        }
+  ],
+  "provisioners": [{
+     "type": "shell",
+     "inline": [
+       "sudo mkfs.ext4 /dev/xvdg",
+       "sudo mkdir -p /mnt/var",
+       "sudo mount /dev/xvdg /mnt/var/",
+       "sudo cp -R /var/* /mnt/var/",
+       "sudo umount /mnt/var",
+       "echo '/dev/xvdg /var ext4 defaults 1 2' | sudo tee -a /etc/fstab",
+       "sudo mount /var"
+       ],
+            "execute_command": "{{ .Vars }} sudo -E -S sh '{{ .Path }}'"
+     },
+     {
+     "type": "shell",
+     "inline": [
+       "sudo mkfs.ext4 /dev/xvdh",
+       "sudo mkdir -p /mnt/var/log/",
+       "sudo mount /dev/xvdh /mnt/var/log/",
+       "sudo cp -r /var/log/* /mnt/var/log/",
+       "sudo umount /mnt/var/log",
+       "echo '/dev/xvdh /var/log ext4 defaults 1 2' | sudo tee -a /etc/fstab",
+       "sudo mount /var/log"
+        ],            
+           "execute_command": "{{ .Vars }} sudo -E -S sh '{{ .Path }}'"
+     },
+
+     {   
+     "type": "shell",
+     "inline": [
+       "sudo mkfs.ext4 /dev/xvdi",
+       "sudo mkdir -p /mnt/var/log/audit",
+       "sudo mount /dev/xvdi /mnt/var/log/audit",
+       "sudo cp -R /var/log/audit/* /mnt/var/log/audit",
+       "sudo umount /mnt/var/log/audit",
+       "echo '/dev/xvdi /var/log/audit ext4 defaults 1 2' | sudo tee -a /etc/fstab",
+       "sudo mount /var/log/audit"
+        ],    
+           "execute_command": "{{ .Vars }} sudo -E -S sh '{{ .Path }}'"
+     },
+     {
+     "type": "shell",
+     "inline": [
+       "sudo mkfs.ext4 /dev/xvdf",
+       "sudo mkdir -p /mnt/new_home",
+       "sudo mount /dev/xvdf /mnt/new_home",
+       "sudo cp -Ra /home/ /mnt/new_home",
+       "sudo mv /home /home_backup",
+       "sudo mkdir -p /home",
+       "echo '/dev/xvdf /home ext4 defaults 1 2' | sudo tee -a /etc/fstab",
+       "sudo mount /home",
+       "sudo mkdir /home/ec2-user",
+       "sudo mkdir /home/ec2-user/.ssh",
+       "sudo echo 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCLa3eG66OrPp/bBO6qwo2heBFnbZAvC1aa1Zd6nPoDJ2s3Fyr9tfj+4JKQCiuWcRK0CUq8VQgv5HYFEj6vg6u58bmHPlU3IRKoGrKp20yoKog+8P5EtTnN5omQ54okunO0eC2CwpbJapaitPFmeCs    rx3Fy83yGkqIUGbMCcTBk0BEGbCIWFjZv6gBTxkOM+psraPUxxNym4bjcQQODetjBQGIzW78SYJhPSzY4/HhgFi0Q5B/9S2ZtKP0vmhfUHT0N6eYuwNc/t2SjPDlXe9VUrtwhF5iGNwmtZjJ3vturdoDut8nD5B/DpeO05oW4z+ydyq7Yw9RNCDgio5z3knrP' > /home/ec2-user/.ssh/authorized_keys",
+       "sudo chown -R ec2-user:ec2-user /home/ec2-user",
+       "sudo chmod 0600 /home/ec2-user/.ssh/authorized_keys",
+       "sudo chmod 0755 /home/ec2-user/.ssh",
+       "sudo cat /etc/fstab",
+       "sudo ls /var",
+       "sudo ls /var/log",
+       "sudo ls /var/log/audit"
+        ],            
+           "execute_command": "{{ .Vars }} sudo -E -S sh '{{ .Path }}'"
+     },
+     {
+     "type": "shell",
+     "inline": [
+       "sudo mkfs.ext4 /dev/xvdj",
+       "echo '/dev/xvdj /tmp ext4 defaults 1 2' | sudo tee -a /etc/fstab"
+        ],    
+           "execute_command": "{{ .Vars }} sudo -E -S sh '{{ .Path }}'"
+     },
+     {
+    "type" : "shell",
+    "inline" : [
+      "sleep 20",
+      "sudo groupadd allowSsh",
+      "sudo useradd -g allowSsh ansible",
+      "sudo groupadd ansible",
+      "sudo echo 'ansible ALL=NOPASSWD: ALL' | sudo EDITOR='tee -a' visudo"
+    ]},{
+    "type" : "shell",
+    "execute_command": "echo '' | sudo -S -u ansible '{{ .Path }}'",
+    "inline" : [
+      "mkdir ~/.ssh",
+      "echo 'ssh-rsa AAAAB3NzaC1yc2EAAAADAQABAAABAQCLa3eG66OrPp/bBO6qwo2heBFnbZAvC1aa1Zd6nPoDJ2s3Fyr9tfj+4JKQCiuWcRK0CUq8VQgv5HYFEj6vg6u58bmHPlU3IRKoGrKp20yoKog+8P5EtTnN5omQ54okunO0eC2CwpbJapaitPFmeCsrx3Fy83yGkqIUGbMCcTBk0BEGbCIWFjZv6gBTxkOM+psraPUxxNym4bjcQQODetjBQGIzW78SYJhPSzY4/HhgFi0Q5B/9S2ZtKP0vmhfUHT0N6eYuwNc/t2SjPDlXe9VUrtwhF5iGNwmtZjJ3vturdoDut8nD5B/DpeO05oW4z+ydyq7Yw9RNCDgio5z3knrP' > ~/.ssh/authorized_keys"
+  ]},{
+    "type" : "shell",
+    "inline" : [
+      "sudo yum install readline-devel git make zlib-devel sqlite-devel.x86_64 gcc g++ -y",
+      "sudo yum update -y",
+      "sudo yum install postgresql-devel -y",
+      "sudo yum install ruby-devel make ruby-irb -y",
+      "sudo yum groupinstall 'Development Tools' -y",
+      "gpg --keyserver hkp://keys.gnupg.net --recv-keys 409B6B1796C275462A1703113804BB82D39DC0E3 7D2BAF1CF37B13E2069D6956105BD0E739499BDB",
+      "curl -sSL https://rvm.io/mpapis.asc | sudo gpg2 --import -",
+      "curl -sSL https://get.rvm.io | bash -s stable",
+      "ruby -v",
+      "bash -c 'source ~/.rvm/scripts/rvm && rvm install 2.2.7'",
+      "bash -c 'source ~/.rvm/scripts/rvm && rvm --default use 2.2.7'",
+      "wget -O splunkforwarder-6.6.1-aeae3fe0c5af-Linux-x86_64.tgz 'https://www.splunk.com/bin/splunk/DownloadActivityServlet?architecture=x86_64&platform=linux&version=6.6.1&product=universalforwarder&filename=splunkforwarder-6.6.1-aeae3fe0c5af-Linux-x86_64.tgz&wget=true'",
+      "sudo tar xvzf splunkforwarder-6.6.1-aeae3fe0c5af-Linux-x86_64.tgz -C /opt",
+      "sudo /opt/splunkforwarder/bin/splunk start --accept-license",
+      "sudo /opt/splunkforwarder/bin/splunk enable boot-start",
+      "sudo /opt/splunkforwarder/bin/splunk add forward-server 10.224.224.80:9997 -auth admin:changeme",
+      "sudo /opt/splunkforwarder/bin/splunk set deploy-poll 10.224.224.80:8089",
+      "sudo /opt/splunkforwarder/bin/splunk stop",
+      "sudo /opt/splunkforwarder/bin/splunk clone-prep-clear-config",
+      "sudo /opt/splunkforwarder/bin/splunk add monitor /var/log/ -auth admin:changeme"
+    ]},{
+    "type" : "shell",
+    "inline" : [
+      "sleep 10",
+      "sudo yum install -y epel-release",
+      "sudo yum install -y --enablerepo=epel nodejs npm",
+      "bash -c 'source ~/.rvm/scripts/rvm && rvm --default use 2.2.7 && gem install rails -v 4.1.9'"
+    ]
+    }
+  ]
+}

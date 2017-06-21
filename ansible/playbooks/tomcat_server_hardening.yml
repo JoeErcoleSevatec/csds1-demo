@@ -1,0 +1,10 @@
+---
+- hosts: all
+  roles:
+  - cis2-amazon-linux
+  remote_user: ansible
+  become: yes
+  vars:
+    cis_sshd_allow_groups: allowSsh
+    cis_hosts_allow_all_ips: "127.0.0.1,10.0.0.0/16,0.0.0.0/0"
+    cis_level_1_exclusions: ["1.1.19", "5.3.2"]

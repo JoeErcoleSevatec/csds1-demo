@@ -1,0 +1,310 @@
+{
+  "AWSTemplateFormatVersion" : "2010-09-09",
+
+  "Description" : "Creates subnets and sets up routing for base application setup.",
+
+  "Parameters" : {
+    "SSLCertArn" : {
+      "Type" : "String",
+      "Default" : ""
+    }
+  },
+
+  "Mappings" : {
+  },
+
+  "Resources" : {
+
+    "CSDSDemoWebappLoadBalancer" : {
+      "Type" : "AWS::ElasticLoadBalancing::LoadBalancer",
+      "Properties" : {
+        "LoadBalancerName" : "CSDS-Demo-WebELB",
+        "SecurityGroups" : [ { "Fn::GetAtt" : ["CFTSecGroups", "Outputs.PublicLoadBalancerSecurityGroup"]} ],
+        "Subnets" : [{ "Ref" : "PublicSubnet1" }, { "Ref" : "PublicSubnet2" }],
+        "Scheme" : "internet-facing",
+        "AppCookieStickinessPolicy" : 
+          [ {
+            "PolicyName" : "HTTPSCookieStickinessPolicy",
+            "CookieName" : "connect.sid"
+          } ],
+        "Listeners" : 
+          [ {
+            "LoadBalancerPort" : "80",
+            "InstancePort" : "80",
+            "Protocol" : "HTTP"
+          },
+          {
+            "LoadBalancerPort": "443",
+            "InstancePort" : "8080",
+            "Protocol" : "HTTPS",
+            "PolicyNames" : [ "HTTPSCookieStickinessPolicy" ],
+            "SSLCertificateId" : { "Ref" : "SSLCertArn" }
+          } ],
+        "HealthCheck" : {
+          "Target" : { "Fn::Join" : [ "", ["HTTP:8080", "/status"]]},
+          "HealthyThreshold" : "5",
+          "UnhealthyThreshold" : "3",
+          "Interval" : "30",
+          "Timeout" : "5"
+        }
+      },
+      "DependsOn" : "CFTSecGroups"
+    },
+
+    "CSDSDemoJumpboxLoadBalancer" : {
+      "Type" : "AWS::ElasticLoadBalancing::LoadBalancer",
+      "Properties" : {
+        "LoadBalancerName" : "CSDS-Demo-JumpboxELB",
+        "SecurityGroups" : [ { "Fn::GetAtt" : ["CFTSecGroups", "Outputs.JumpboxLoadBalancerSecurityGroup"]} ],
+        "Subnets" : [{ "Ref" : "PublicSubnet1" }, { "Ref" : "PublicSubnet2" }],
+        "Scheme" : "internet-facing",
+        "Listeners" : 
+          [ {
+            "LoadBalancerPort" : "22",
+            "InstancePort" : "22",
+            "InstanceProtocol" : "TCP",
+            "Protocol" : "TCP"
+          } ],
+        "HealthCheck" : {
+          "Target" : "TCP:22",
+          "HealthyThreshold" : "5",
+          "UnhealthyThreshold" : "3",
+          "Interval" : "30",
+          "Timeout" : "5"
+        }
+      },
+      "DependsOn" : "CFTSecGroups"
+    },
+
+    "VPC" : {
+      "Type" : "AWS::EC2::VPC",
+      "Properties" : {
+        "CidrBlock" : "10.224.0.0/16",
+        "Tags" : [ {"Key" : "Application", "Value" : { "Ref" : "AWS::StackId"} } ]
+      }
+    },
+
+    "PublicSubnet1" : {
+      "Type" : "AWS::EC2::Subnet",
+      "Properties" : {
+        "VpcId" : { "Ref" : "VPC" },
+        "CidrBlock" : "10.224.128.0/24",
+        "AvailabilityZone" : { "Fn::Select" : ["0", { "Fn::GetAZs" : { "Ref" : "AWS::Region" } }]},
+        "Tags" : [
+          {"Key" : "Application", "Value" : { "Ref" : "AWS::StackId"} },
+          {"Key" : "Network", "Value" : "Public" },
+          {"Key" : "Name", "Value" : "PublicSubnet1" }
+        ]
+      }
+    },
+
+    "PublicSubnet2" : {
+      "Type" : "AWS::EC2::Subnet",
+      "Properties" : {
+        "VpcId" : { "Ref" : "VPC" },
+        "CidrBlock" : "10.224.129.0/24",
+        "AvailabilityZone" : { "Fn::Select" : ["1", { "Fn::GetAZs" : { "Ref" : "AWS::Region" } }]},
+        "Tags" : [
+          {"Key" : "Application", "Value" : { "Ref" : "AWS::StackId"} },
+          {"Key" : "Network", "Value" : "Public" },
+          {"Key" : "Name", "Value" : "PublicSubnet2" }
+        ]
+      }
+    },
+
+    "InternetGateway" : {
+      "Type" : "AWS::EC2::InternetGateway",
+      "Properties" : {
+        "Tags" : [
+          {"Key" : "Application", "Value" : { "Ref" : "AWS::StackId"} },
+          {"Key" : "Network", "Value" : "Public" }
+        ]
+      }
+    },
+
+    "GatewayAttachment" : {
+      "Type" : "AWS::EC2::VPCGatewayAttachment",
+      "Properties" : {
+        "InternetGatewayId" : { "Ref" : "InternetGateway"},
+        "VpcId" : { "Ref" : "VPC" }
+      }
+    },
+
+    "PublicRouteTable" : {
+      "Type" : "AWS::EC2::RouteTable",
+      "Properties" : {
+        "VpcId" : {"Ref" : "VPC"},
+        "Tags" : [
+          {"Key" : "Application", "Value" : { "Ref" : "AWS::StackId"} },
+          {"Key" : "Network", "Value" : "Public" }
+        ]
+      }
+    },
+
+    "PublicRoute" : {
+      "Type" : "AWS::EC2::Route",
+      "Properties" : {
+        "RouteTableId" : { "Ref" : "PublicRouteTable" },
+        "DestinationCidrBlock" : "0.0.0.0/0",
+        "GatewayId" : { "Ref" : "InternetGateway" }
+      },
+      "DependsOn" : "GatewayAttachment"
+    },
+
+    "PublicSubnetRouteTableAssociation1" : {
+      "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties" : {
+        "SubnetId" : { "Ref" : "PublicSubnet1" },
+        "RouteTableId" : { "Ref" : "PublicRouteTable" }
+      }
+    },
+
+    "PublicSubnetRouteTableAssociation2" : {
+      "Type" : "AWS::EC2::SubnetRouteTableAssociation",
+      "Properties" : {
+        "SubnetId" : { "Ref" : "PublicSubnet2" },
+        "RouteTableId" : { "Ref" : "PublicRouteTable" }
+      }
+    },
+
+    "PublicNetworkAcl" : {
+      "Type" : "AWS::EC2::NetworkAcl",
+      "Properties" : {
+        "VpcId" : {"Ref" : "VPC"},
+        "Tags" : [
+          {"Key" : "Application", "Value" : { "Ref" : "AWS::StackId"} },
+          {"Key" : "Network", "Value" : "Public" }
+        ]
+      }
+    },
+
+    "InboundHTTPPublicNetworkAclEntry" : {
+      "Type" : "AWS::EC2::NetworkAclEntry",
+      "Properties" : {
+        "NetworkAclId" : {"Ref" : "PublicNetworkAcl"},
+        "RuleNumber" : "100",
+        "Protocol" : "6",
+        "RuleAction" : "allow",
+        "Egress" : "false",
+        "CidrBlock" : "0.0.0.0/0",
+        "PortRange" : {"From" : "80", "To" : "80"}
+      }
+    },
+
+    "InboundHTTPSPublicNetworkAclEntry" : {
+      "Type" : "AWS::EC2::NetworkAclEntry",
+      "Properties" : {
+        "NetworkAclId" : { "Ref" : "PublicNetworkAcl" },
+        "RuleNumber" : "101",
+        "Protocol" : "6",
+        "RuleAction" : "allow",
+        "Egress" : "false",
+        "CidrBlock" : "0.0.0.0/0",
+        "PortRange" : { "From" : "443", "To" : "443" }
+      }
+    },
+
+    "InboundSSHPublicNetworkAclEntry" : {
+      "Type" : "AWS::EC2::NetworkAclEntry",
+      "Properties" : {
+        "NetworkAclId" : { "Ref" : "PublicNetworkAcl" },
+        "RuleNumber" : "102",
+        "Protocol" : "6",
+        "RuleAction" : "allow",
+        "Egress" : "false",
+        "CidrBlock" : "0.0.0.0/0",
+        "PortRange" : { "From" : "22", "To" : "22" }
+      }
+    },
+
+    "InboundDynamicPortsPublicNetworkAclEntry" : {
+      "Type" : "AWS::EC2::NetworkAclEntry",
+      "Properties" : {
+        "NetworkAclId" : {"Ref" : "PublicNetworkAcl"},
+        "RuleNumber" : "103",
+        "Protocol" : "6",
+        "RuleAction" : "allow",
+        "Egress" : "false",
+        "CidrBlock" : "0.0.0.0/0",
+        "PortRange" : {"From" : "1024", "To" : "65535"}
+      }
+    },
+
+    "OutboundPublicNetworkAclEntry" : {
+      "Type" : "AWS::EC2::NetworkAclEntry",
+      "Properties" : {
+        "NetworkAclId" : {"Ref" : "PublicNetworkAcl"},
+        "RuleNumber" : "100",
+        "Protocol" : "6",
+        "RuleAction" : "allow",
+        "Egress" : "true",
+        "CidrBlock" : "0.0.0.0/0",
+        "PortRange" : {"From" : "0", "To" : "65535"}
+      }
+    },
+
+    "PublicSubnetNetworkAclAssociation1" : {
+      "Type" : "AWS::EC2::SubnetNetworkAclAssociation",
+      "Properties" : {
+        "SubnetId" : { "Ref" : "PublicSubnet1" },
+        "NetworkAclId" : { "Ref" : "PublicNetworkAcl" }
+      }
+    },
+
+    "PublicSubnetNetworkAclAssociation2" : {
+      "Type" : "AWS::EC2::SubnetNetworkAclAssociation",
+      "Properties" : {
+        "SubnetId" : { "Ref" : "PublicSubnet2" },
+        "NetworkAclId" : { "Ref" : "PublicNetworkAcl" }
+      }
+    },
+
+    "CFTSecGroups" : {
+      "Type" : "AWS::CloudFormation::Stack",
+      "Properties" : {
+        "Parameters" : {
+          "VPC" : { "Ref" : "VPC"}
+        },
+        "TemplateURL" : "https://s3.amazonaws.com/csds-demo/cfts/secgroups.template"
+      }
+    }
+  },
+  "Outputs" : {
+    "PublicSubnets" : {
+      "Description" : "Public subnets for Web Server Deployment",
+      "Value" : { "Fn::Join" : [",", [{ "Ref" : "PublicSubnet1" }, { "Ref" : "PublicSubnet2" }]]}
+    },
+    "PublicLoadBalancerSecurityGroup" : {
+      "Description" : "SG Assigned to Web load balancer.",
+      "Value" : { "Fn::GetAtt" : ["CFTSecGroups", "Outputs.PublicLoadBalancerSecurityGroup"]}
+    },
+    "JumpboxLoadBalancerSecurityGroup" : {
+      "Description" : "Secuirty group assigned to the Jumpbox ELB",
+      "Value" : { "Fn::GetAtt" : ["CFTSecGroups", "Outputs.JumpboxLoadBalancerSecurityGroup"]}
+    },
+    "ToolsSecurityGroup" : {
+      "Description" : "Secuirty group to be assigned to all tools servers.",
+      "Value" : { "Fn::GetAtt" : ["CFTSecGroups", "Outputs.ToolsSecurityGroup"]}
+    },
+    "JumpboxSecurityGroup": {
+      "Description" : "Secuirty group assigned to the Jumpbox ELB",
+      "Value" : { "Fn::GetAtt" : ["CFTSecGroups", "Outputs.JumpboxSecurityGroup"]}
+    },
+    "WebServerSecurityGroup": {
+      "Description" : "Secuirty group assigned to the Web Servers.",
+      "Value" : { "Fn::GetAtt" : ["CFTSecGroups", "Outputs.WebServerSecurityGroup"]}
+    },
+    "WebLoadBalancer" : {
+      "Description" : "Load Balancer for Web Servers",
+      "Value" : { "Ref" : "CSDSDemoWebappLoadBalancer"}
+    },
+    "JumpboxLoadBalancer" : {
+      "Description" : "Load Balancer for Jumpbox(es).",
+      "Value" : { "Ref" : "CSDSDemoJumpboxLoadBalancer"}
+    },
+    "VPC" : {
+      "Description" : "VPC Id",
+      "Value" : { "Ref" : "VPC"}
+    }
+  }
+}

@@ -1,0 +1,45 @@
+# Standards: 0.11
+---
+
+# 5.3.2 Ensure lockout for failed password attempts is configured
+
+- name: 5.3.2 - Ensure proper auth pam_unix.so configuration
+  lineinfile:
+    path: "{{ item }}"
+    regexp: "^[\\s]*auth.*pam_unix\\.so"
+    line: "auth [success=1 default=bad] pam_unix.so"
+  with_items: "{{ cis_pass_auth_files }}"
+  tags:
+    - level-1
+    - section-5
+    - "5.3.2"
+    - scored
+
+- name: 5.3.2 - Ensure lockout for failed password attempts is configured (before text)
+  blockinfile:
+    path: "{{ item }}"
+    block: |
+      auth required pam_faillock.so preauth audit silent deny={{ cis_pass_attempts }} unlock_time={{ cis_pass_unlock_time }}
+    insertbefore: "^[\\s]*auth.*pam_unix\\.so"
+    marker: "# {mark} Inserted by Ansible CIS-Level1-5.3.2"
+  with_items: "{{ cis_pass_auth_files }}"
+  tags:
+    - level-1
+    - section-5
+    - "5.3.2"
+    - scored
+
+- name: 5.3.2 - Ensure lockout for failed password attempts is configured (after text)
+  blockinfile:
+    path: "{{ item }}"
+    block: |
+      auth [default=die] pam_faillock.so authfail audit deny={{ cis_pass_attempts }} unlock_time={{ cis_pass_unlock_time }}
+      auth sufficient pam_faillock.so authsucc audit deny={{ cis_pass_attempts }} unlock_time={{ cis_pass_unlock_time }}
+    insertafter: "^[\\s]*auth.*pam_unix\\.so"
+    marker: "# {mark} Inserted by Ansible CIS-Level1-5.3.2"
+  with_items: "{{ cis_pass_auth_files }}"
+  tags:
+    - level-1
+    - section-5
+    - "5.3.2"
+    - scored

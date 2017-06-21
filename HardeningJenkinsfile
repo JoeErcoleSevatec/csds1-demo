@@ -1,0 +1,172 @@
+node {
+    def region="us-east-1"
+    def amiId="ami-d4af83c2"
+    def instanceId
+    def instanceIp="10.224.129.9"
+    def scanOutput
+    def ansibleServer="10.224.224.83"
+    def subnet1="subnet-128b2b48"
+    def subnet2="subnet-470e0322"
+    def group1="sg-cdca31bc"
+    
+    def pwdPath="/tmp"
+
+    stage('Preparation'){
+        notifySlack("Prepping Build.")
+        currentBuild.result = 'SUCCESS'
+        checkout scm: [$class: 'GitSCM', userRemoteConfigs: [[url: 'git@gitlab.com:CSDS-Demo/csds-bash-scripts.git', credentialsId: 'GitLab JCeanfaglione']], branches: [[name: 'master']]], poll: false
+    }
+    
+    
+    stage('Build AMI') {
+        
+        sh "sudo /opt/packer/packer build -machine-readable -var 'ami_desc=Jenkins Build Image ${BUILD_NUMBER}' -var 'aws_region=us-east-1' -var 'ssh_user=ec2-user' ./packer/rails/build.json  | tee build.log"
+        amiId=sh (
+            script: "grep 'artifact,0,id' build.log | cut -d, -f6 | cut -d: -f2",
+            returnStdout: true
+        ).trim()
+        
+        notifySlack("Packer Built AMI $amiId")
+
+        echo "built: $amiId"
+        
+   }
+
+   stage('Launch Instance') {
+       
+       
+        instanceId=sh (
+            script: "aws ec2 run-instances --region $region --image-id $amiId --count 1 --instance-type t2.medium --key-name jceanfaglione-stic --security-group-ids $group1 --subnet-id $subnet1 --subnet-id $subnet2 --tag-specifications 'ResourceType=instance,Tags=[{Key=Name,Value=CSDS-Rails},{Key=OwnerContact,Value=jceanfaglione@sevatec.com},{Key=Project,Value=CSDS}]' --associate-public-ip-address --query 'Instances[0].InstanceId' --output text",
+            returnStdout: true
+        ).trim()
+        
+        echo "EC2 Started: $instanceId"
+
+        notifySlack("Launched Instance $instanceId")
+
+        lboutput=sh (
+            script: "aws elb register-instances-with-load-balancer --region $region --load-balancer-name 'CSDS-Demo-WebELB' --instances $instanceId --output text",
+            returnStdout: true
+        ).trim()
+        
+        instanceIp=sh (
+            script: "aws ec2 describe-instances --region $region --instance-ids $instanceId --query 'Reservations[0].Instances[0].PrivateIpAddress' --output text",
+            returnStdout: true
+        ).trim()
+
+
+        sh "aws ec2 wait instance-running --region $region --instance-ids $instanceId"
+
+        echo "Instance IP: $instanceIp"
+        
+        currentBuild.result = 'SUCCESS'
+   }
+   
+   stage('Deploy Application') {
+        sh 'sleep 60'
+       
+        checkout scm: [$class: 'GitSCM', userRemoteConfigs: [[url: 'git@gitlab.com:CSDS-Demo/csds-uscis-ruby.git', credentialsId: 'GitLab JCeanfaglione']], branches: [[name: 'master']]], poll: false
+
+        notifySlack("Deploying Application")
+
+        //sshagent(['3c3b1db0-3136-4172-ad4a-437d9cd903e2']) {
+        //    sh "scp -o StrictHostKeyChecking=no -r . ansible@$instanceIp:~/ruby"
+        //}
+        sh "scp -i ~/.ssh/ansible.pri -o StrictHostKeyChecking=no -r . 'ansible@$instanceIp:~/ruby'"
+
+        checkout scm: [$class: 'GitSCM', userRemoteConfigs: [[url: 'git@gitlab.com:CSDS-Demo/csds-bash-scripts.git', credentialsId: 'GitLab JCeanfaglione']], branches: [[name: 'master']]], poll: false
+        
+        notifySlack("Building Ruby")
+
+        sshagent(['3c3b1db0-3136-4172-ad4a-437d9cd903e2']) {
+            //sh "ssh -o StrictHostKeyChecking=no ansible@$instanceIp < prep-rails.sh"
+        }
+
+        sh "ssh -i ~/.ssh/ansible.pri -o StrictHostKeyChecking=no ansible@$instanceIp < prep-rails.sh"
+        sh "ssh -i ~/.ssh/ansible.pri -o StrictHostKeyChecking=no ansible@$instanceIp < start-rails.sh"
+        
+        sh "curl http://$instanceIp:8080" 
+        
+   }
+   
+   stage('OWASP Analysis'){
+        pwdPath = pwd()
+        //sh "echo ${JOB_NAME}"
+        sh "mkdir /tmp/${BUILD_NUMBER}"
+        sh "echo Workspace: ${pwdPath}"
+        sh "./run-zap-scan.sh http://$instanceIp:8080/ /tmp/${BUILD_NUMBER}"
+
+        publishHTML (target: [
+            allowMissing: false,
+            alwaysLinkToLastBuild: false,
+            keepAll: true,
+            reportDir: "/tmp/${BUILD_NUMBER}",
+            reportFiles: "owasp-scan.html",
+            reportName: "OWASP Report"
+        ])
+    }
+   
+    stage('Pre-Hardening Nessus Scan'){
+        withCredentials([[$class: 'UsernamePasswordMultiBinding', credentialsId: 'NessusKeys',usernameVariable: 'KEY', passwordVariable: 'SECRET']]) 
+        {
+            scanOutput=sh (
+                    script: "curl -H 'Content-Type: application/json' -H 'X-ApiKeys: accessKey=$KEY; secretKey=$SECRET;' -X POST -d '{\"alt_targets\":[\"$instanceIp\"]}' https://cloud.tenable.com/scans/81/launch",
+                    returnStdout: true
+            ).trim()
+        }
+    }
+
+    stage('Hardening'){
+        sshagent(['3c3b1db0-3136-4172-ad4a-437d9cd903e2']) {
+            sh "ssh -o StrictHostKeyChecking=no ansible@$ansibleServer 'sudo ansible-playbook /etc/ansible/playbooks/tomcat_server_hardening.yml -i \"$instanceIp,\"'"
+        }
+    }
+    stage('Post-Hardening Nessus Scan'){
+        withCredentials([[$class: 'UsernamePasswordMultiBinding', credentialsId: 'NessusKeys',usernameVariable: 'KEY', passwordVariable: 'SECRET']]) 
+        {
+            scanOutput=sh (
+                    script: "curl -H 'Content-Type: application/json' -H 'X-ApiKeys: accessKey=$KEY; secretKey=$SECRET;' -X POST -d '{\"alt_targets\":[\"$instanceIp\"]}' https://cloud.tenable.com/scans/81/launch",
+                    returnStdout: true
+            ).trim()
+        }
+    }
+    stage('Post-Hardening Vulnerability Scan'){
+        withCredentials([[$class: 'UsernamePasswordMultiBinding', credentialsId: 'NessusKeys',usernameVariable: 'KEY', passwordVariable: 'SECRET']]) 
+        {
+            scanOutput=sh (
+                    script: "curl -H 'Content-Type: application/json' -H 'X-ApiKeys: accessKey=$KEY; secretKey=$SECRET;' -X POST -d '{\"alt_targets\":[\"$instanceIp\"]}' https://cloud.tenable.com/scans/140/launch",
+                    returnStdout: true
+            ).trim()
+        }
+    }
+    stage("Create Gold Image"){
+        notifySlack("Creating Hardened Image of $instanceId")
+        
+        sh "aws ec2 create-image --region $region --instance-id $instanceId --name \"Gold Build Image ${BUILD_NUMBER}\""
+        
+    }
+   
+   /*
+   stage('Clean up'){
+        notifySlack("Terminating Instance $instanceId")
+        sh "AWS_DEFAULT_REGION=us-east-1 AWS_ACCESS_KEY_ID=$KEY AWS_SECRET_ACCESS_KEY=$SECRET aws ec2 terminate-instances --instance-ids $instanceId"
+   }
+   */
+   stage('Results'){
+        notifySlack("Finished Build.  RESULT: ${currentBuild.result}")
+        echo "RESULT: ${currentBuild.result}"
+   }
+}
+
+import groovy.json.JsonOutput
+def notifySlack(text) {
+    withCredentials([[$class: 'UsernamePasswordMultiBinding', credentialsId: 'ed5c654b-fc5d-4b87-b3d9-1d8186343471',usernameVariable: 'USER', passwordVariable: 'SECRET']]) 
+    {
+      def slackURL = "https://hooks.slack.com/services/T5L1HQ1TN/B5T19QKC4/$SECRET"
+      def payload = JsonOutput.toJson([text      : "USCIS CSDS AMI Hardening: " + text,
+                                  channel   : "#chatops",
+                                  username  : "jenkins",
+                                  icon_emoji: ":jenkins:"])
+      sh "curl -X POST --data-urlencode \'payload=${payload}\' ${slackURL}"
+    }
+}
